@@ -1,11 +1,13 @@
-# Tier Tournament
+# Pecking Order
+
+*A game of ranking.*
 
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)
 ![Flask 3](https://img.shields.io/badge/flask-3.x-black)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
-Build a roster of anything (fruits, movies, restaurants...), then rank the
-whole list by voting on head-to-head matchups. Instead of a single-elimination
+Gather a flock of anything (fruits, movies, restaurants...), then settle the
+whole list's pecking order by voting on head-to-head matchups. Instead of a single-elimination
 bracket (which only crowns one winner) or a full round-robin (which needs
 n*(n-1)/2 comparisons), this uses a merge-sort-based comparison order that
 produces a complete ranking of every candidate in roughly n*log2(n) matchups.
@@ -36,15 +38,17 @@ To stop the app, press `Ctrl+C` in the terminal it's running in.
 
 ## How it works
 
-1. **Setup** — name a category and add contenders (one at a time, or paste a
-   whole list).
-2. **Tournament** — vote on each matchup: red corner, blue corner, or "too
-   close to call." Progress is saved after every vote, so closing the tab
-   mid-tournament is safe — reopen the page and you'll be offered a **Resume**.
-3. **Results** — a numbered ranking of everyone, medal-marked top 3, ties
-   called out, plus fun stats (heaviest debates, hot streaks). Copy the
-   standings as text or download them as a PDF. Past tournaments are kept
-   under **History**.
+1. **Gather your flock** — name a category and add contenders (one at a time,
+   or paste a whole list).
+2. **The pecking** — vote on each matchup: Robin, Bluebird, or "birds of a
+   feather" (a tie). Turn on the manual squabble timer if you want to listen
+   to songs or watch clips before the clock starts. Progress is saved after
+   every vote, so closing the tab mid-game is safe — reopen the page and you'll be offered a **Resume**.
+3. **The final pecking order** — a numbered ranking of everyone, with the
+   winner crowned top of the roost, medal-marked top 3, ties called out, plus
+   fun stats (biggest squabbles, hot streaks). Copy the
+   standings as text or download them as a PDF. Past games are kept
+   in **The Nest**.
 
 ## Project layout
 

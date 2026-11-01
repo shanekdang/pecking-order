@@ -3,33 +3,76 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tier Tournament</title>
+<title>Pecking Order</title>
+<script>
+  // Set the theme before first paint so there's no flash of the wrong one.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("po.theme"); } catch (e) { /* ignore */ }
+    if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  <!-- One chubby bird, reused everywhere; colors come from --bird-* custom properties -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="bird" viewBox="0 0 64 64">
+      <path style="fill:var(--bird-dark)" d="M14 38 C6 36 2 30 3 25 C8 29 12 30 17 31 Z" />
+      <circle style="fill:var(--bird-body)" cx="32" cy="36" r="21" />
+      <path style="fill:var(--bird-body)" d="M28 17 C26 9 32 6 36 8 C32 10 31 13 33 16 Z" />
+      <ellipse style="fill:var(--bird-belly)" cx="37" cy="44" rx="13" ry="11" />
+      <path style="fill:var(--bird-dark)" d="M15 36 C21 28 32 30 33 38 C30 45 20 46 15 36 Z" />
+      <circle style="fill:var(--bird-eye)" cx="40" cy="29" r="3.2" />
+      <circle fill="#fff" cx="41.2" cy="27.8" r="1.1" />
+      <ellipse style="fill:var(--blush)" opacity="0.6" cx="45" cy="36.5" rx="3.4" ry="2.2" />
+      <path style="fill:var(--beak)" d="M50 30 L58.5 33.5 L50 37 Q48 33.5 50 30 Z" />
+      <path style="stroke:var(--beak)" fill="none" stroke-width="2.6" stroke-linecap="round" d="M28 56.5 v5 M37 56.5 v5" />
+    </symbol>
+  </svg>
+
   <div id="app">
     <header class="masthead">
-      <div>
-        <span class="masthead-eyebrow">HEAD-TO-HEAD RANKING</span>
-        <h1 class="masthead-title">TIER TOURNAMENT</h1>
+      <div class="masthead-brand">
+        <svg class="bird masthead-logo" aria-hidden="true"><use href="#bird" /></svg>
+        <div>
+          <span class="masthead-eyebrow">a game of ranking</span>
+          <h1 class="masthead-title">Pecking Order</h1>
+        </div>
       </div>
-      <button id="btn-history" class="link-btn" hidden type="button">Past results</button>
+      <div class="masthead-actions">
+        <button id="btn-history" class="nest-btn" hidden type="button">🪺 The Nest</button>
+        <button id="btn-theme" class="icon-btn" type="button" aria-label="Switch theme">
+          <svg class="theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1Z" />
+            <circle fill="currentColor" cx="17.5" cy="5" r="1" /><circle fill="currentColor" cx="20.5" cy="8.5" r="0.7" />
+          </svg>
+          <svg class="theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle fill="currentColor" cx="12" cy="12" r="5" />
+            <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M12 2v2.2M12 19.8V22M2 12h2.2M19.8 12H22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+            </g>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <section id="view-setup" class="view">
       <p class="instructions">
-        Build your roster, then vote on each head-to-head matchup: pick whichever contender you'd genuinely
-        rather have ranked higher. <strong>Even a slim preference beats a tie</strong> — save "too close to
-        call" for genuine dead heats. The more real decisions your group makes, the sharper the final ranking.
+        Gather your flock, then vote on each head-to-head matchup: pick whichever contender you'd genuinely
+        rather have ranked higher. <strong>Even a slim preference beats a tie</strong> — save "birds of a
+        feather" for genuine dead heats. The more real decisions your group makes, the sharper the final pecking order.
       </p>
 
       <div id="resume-banner" class="resume-banner" hidden>
         <div class="resume-banner-text">
           <strong id="resume-title"></strong>
-          <span id="resume-sub" class="text-dim mono"></span>
+          <span id="resume-sub" class="resume-sub text-dim mono"></span>
         </div>
         <div class="resume-actions">
           <button id="btn-resume" class="btn btn-gold" type="button">Resume</button>
@@ -37,11 +80,11 @@
         </div>
       </div>
 
-      <div id="setup-form">
-        <label class="field-label" for="input-category">CATEGORY</label>
+      <div id="setup-form" class="panel">
+        <label class="field-label" for="input-category">What are we ranking?</label>
         <input id="input-category" type="text" placeholder="e.g. Best Fruits" maxlength="60" autocomplete="off" />
 
-        <label class="field-label" for="input-candidate">ROSTER</label>
+        <label class="field-label" for="input-candidate">Gather your flock</label>
         <div class="add-row">
           <input id="input-candidate" type="text" placeholder="Add a contender…" maxlength="60" autocomplete="off" />
           <button id="btn-add" class="btn btn-gold" type="button">Add</button>
@@ -50,21 +93,24 @@
         <button id="btn-toggle-bulk" class="link-btn" type="button">+ paste a list</button>
         <div id="bulk-area" hidden style="margin-top:10px;">
           <textarea id="input-bulk" rows="5" placeholder="One contender per line…"></textarea>
-          <button id="btn-add-bulk" class="btn btn-ghost" type="button" style="margin-top:8px;">Add all</button>
+          <button id="btn-add-bulk" class="btn btn-ghost" type="button" style="margin-top:10px;">Add all</button>
         </div>
 
         <ol id="roster-list" class="roster-list"></ol>
-        <p id="roster-empty" class="text-faint" style="margin-top:12px;">No contenders yet — add at least two to begin.</p>
+        <div id="roster-empty" class="empty-state">
+          <svg class="bird" aria-hidden="true"><use href="#bird" /></svg>
+          <p>The flock is empty — add at least two contenders to begin.</p>
+        </div>
 
-        <label class="field-label">MODE</label>
-        <div class="segmented" id="mode-toggle" role="group" aria-label="Tournament mode">
+        <label class="field-label">Mode</label>
+        <div class="segmented" id="mode-toggle" role="group" aria-label="Game mode">
           <button class="segmented-btn" data-mode="full" type="button">Complete Ranking</button>
           <button class="segmented-btn" data-mode="quick" type="button">Quick Mode</button>
         </div>
         <p id="mode-desc" class="text-faint" style="margin-top:6px;"></p>
 
         <div id="topn-row" hidden style="margin-top:14px;">
-          <label class="field-label">HOW MANY TOP SPOTS?</label>
+          <label class="field-label">How many top spots?</label>
           <div class="segmented" id="topn-toggle" role="group" aria-label="Number of top spots">
             <button class="segmented-btn" data-topn="1" type="button">Top 1</button>
             <button class="segmented-btn" data-topn="3" type="button">Top 3</button>
@@ -72,73 +118,97 @@
           </div>
         </div>
 
-        <button id="btn-begin" class="btn btn-primary btn-block" disabled type="button">Begin Tournament</button>
+        <label class="field-label">Squabble timer</label>
+        <div class="segmented" id="timer-toggle" role="group" aria-label="Squabble timer">
+          <button class="segmented-btn" data-timer="auto" type="button">Starts Automatically</button>
+          <button class="segmented-btn" data-timer="manual" type="button">Start Manually</button>
+        </div>
+        <p id="timer-desc" class="text-faint" style="margin-top:6px;"></p>
+
+        <button id="btn-begin" class="btn btn-primary btn-block" disabled type="button">Let the Pecking Begin</button>
       </div>
     </section>
 
     <section id="view-tournament" class="view" hidden>
       <div class="bout-meta">
-        <span id="bout-category" class="mono text-dim"></span>
-        <span id="bout-counter" class="mono"></span>
+        <span id="bout-category" class="bout-category"></span>
+        <span id="bout-counter" class="bout-counter mono"></span>
       </div>
-      <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+      <div class="progress-track">
+        <div id="progress-fill" class="progress-fill">
+          <svg class="bird progress-bird" aria-hidden="true"><use href="#bird" /></svg>
+        </div>
+      </div>
 
-      <div class="ring">
+      <div id="ring" class="ring">
         <button id="card-a" class="corner-card corner-a" type="button">
-          <span class="corner-label">RED CORNER</span>
+          <svg class="bird card-bird" aria-hidden="true"><use href="#bird" /></svg>
+          <span class="corner-label">ROBIN</span>
           <span id="name-a" class="corner-name"></span>
         </button>
-        <div class="vs-disc">VS</div>
+        <div class="vs-disc">vs</div>
         <button id="card-b" class="corner-card corner-b" type="button">
-          <span class="corner-label">BLUE CORNER</span>
+          <svg class="bird bird-blue bird-flip card-bird" aria-hidden="true"><use href="#bird" /></svg>
+          <span class="corner-label">BLUEBIRD</span>
           <span id="name-b" class="corner-name"></span>
         </button>
       </div>
 
-      <button id="btn-tie" class="btn btn-ghost btn-block" type="button">Too close to call — draw</button>
+      <div id="debate-bar" class="debate-bar" hidden>
+        <button id="btn-start-debate" class="btn btn-primary btn-block" type="button">Let them squawk ▶</button>
+        <p id="debate-hint" class="text-faint">Take your time — the clock won’t run until the squawking starts.</p>
+        <div id="debate-clock" class="debate-clock mono" hidden>
+          <span class="debate-clock-label">Squabbling</span> <span id="debate-clock-time">0:00</span>
+        </div>
+      </div>
+
+      <button id="btn-tie" class="btn btn-ghost btn-block" type="button">Birds of a feather — call it a tie</button>
       <p class="tie-hint text-faint">Last resort — if you lean either way at all, even barely, pick that one.</p>
       <div style="text-align:center; margin-top:14px;">
-        <button id="btn-abandon" class="link-btn danger" type="button">Abandon tournament</button>
+        <button id="btn-abandon" class="link-btn danger" type="button">Fly the coop (abandon this game)</button>
       </div>
     </section>
 
     <section id="view-results" class="view" hidden>
       <div id="print-header" class="print-only">
-        <span class="print-title">TIER TOURNAMENT</span>
+        <span class="print-title">Pecking Order</span>
         <span id="print-date" class="print-date"></span>
       </div>
       <div class="results-header">
-        <span id="results-eyebrow" class="field-label">FINAL STANDINGS</span>
+        <span id="results-eyebrow" class="field-label">The final pecking order</span>
         <h2 id="results-category" class="section-title"></h2>
         <p id="results-stat" class="text-dim mono"></p>
       </div>
       <ol id="results-list" class="standings-list"></ol>
 
       <div id="fun-stats" class="fun-stats" hidden>
-        <span class="field-label">FUN STATS</span>
+        <span class="field-label">Fun stats</span>
         <div id="stat-tiles" class="stat-grid"></div>
         <div class="debate-lists">
           <div id="heaviest-list" class="debate-list-col"></div>
           <div id="easiest-list" class="debate-list-col"></div>
         </div>
-        <p class="text-faint">Timed from when a matchup appears to when you vote — so a bathroom break might sneak into "heaviest debate."</p>
+        <p id="stats-footnote" class="text-faint"></p>
       </div>
 
       <div class="results-actions">
         <button id="btn-copy" class="btn btn-ghost" type="button">Copy as text</button>
         <button id="btn-pdf" class="btn btn-ghost" type="button">Download as PDF</button>
-        <button id="btn-new" class="btn btn-primary" type="button">Start New Tournament</button>
-        <button id="btn-back-history" class="btn btn-ghost" type="button" hidden>Back to history</button>
+        <button id="btn-new" class="btn btn-primary" type="button">Gather a New Flock</button>
+        <button id="btn-back-history" class="btn btn-ghost" type="button" hidden>Back to the nest</button>
       </div>
     </section>
 
     <section id="view-history" class="view" hidden>
       <div class="results-header">
-        <span class="field-label">PAST RESULTS</span>
-        <h2 class="section-title">Tournament History</h2>
+        <span class="field-label">Past flocks</span>
+        <h2 class="section-title">The Nest</h2>
       </div>
       <ol id="history-list" class="history-list"></ol>
-      <p id="history-empty" class="text-faint" hidden>No saved tournaments yet.</p>
+      <div id="history-empty" class="empty-state" hidden>
+        <svg class="bird bird-blue" aria-hidden="true"><use href="#bird" /></svg>
+        <p>The nest is empty — no saved rankings yet.</p>
+      </div>
       <div style="margin-top:16px;">
         <button id="btn-back-setup" class="link-btn" type="button">← Back</button>
       </div>

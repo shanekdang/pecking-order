@@ -20,8 +20,8 @@
     try {
       var raw = localStorage.getItem(DRAFT_KEY);
       var parsed = raw ? JSON.parse(raw) : null;
-      return Object.assign({ category: "", roster: [], mode: "full", topN: 3 }, parsed || {});
-    } catch (e) { return { category: "", roster: [], mode: "full", topN: 3 }; }
+      return Object.assign({ category: "", roster: [], mode: "full", topN: 3, timer: "auto" }, parsed || {});
+    } catch (e) { return { category: "", roster: [], mode: "full", topN: 3, timer: "auto" }; }
   }
   function saveDraft() {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch (e) { /* ignore */ }
@@ -39,14 +39,37 @@
    "input-category", "input-candidate", "btn-add", "add-msg",
    "btn-toggle-bulk", "bulk-area", "input-bulk", "btn-add-bulk",
    "roster-list", "roster-empty", "btn-begin",
-   "mode-toggle", "mode-desc", "topn-row", "topn-toggle",
+   "mode-toggle", "mode-desc", "topn-row", "topn-toggle", "timer-toggle", "timer-desc",
    "bout-category", "bout-counter", "progress-fill",
-   "card-a", "name-a", "card-b", "name-b", "btn-tie", "btn-abandon",
+   "card-a", "name-a", "card-b", "name-b", "btn-tie", "btn-abandon", "ring",
+   "debate-bar", "btn-start-debate", "debate-hint", "debate-clock", "debate-clock-time",
    "results-eyebrow", "results-category", "results-stat", "results-list", "btn-copy", "btn-pdf", "btn-new", "btn-back-history",
    "print-date",
-   "fun-stats", "stat-tiles", "heaviest-list", "easiest-list",
-   "history-list", "history-empty", "btn-back-setup", "btn-history"
+   "fun-stats", "stats-footnote", "stat-tiles", "heaviest-list", "easiest-list",
+   "history-list", "history-empty", "btn-back-setup", "btn-history", "btn-theme"
   ].forEach(function (id) { el[id] = document.getElementById(id); });
+
+  /* ---------- light / dark theme ---------- */
+  var THEME_KEY = "po.theme";
+  var systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+  function savedTheme() {
+    try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; }
+  }
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    el["btn-theme"].setAttribute("aria-label", theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
+    el["btn-theme"].title = theme === "dark" ? "Good morning! (light theme)" : "Good night! (dark theme)";
+  }
+  applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+  el["btn-theme"].addEventListener("click", function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ignore */ }
+    applyTheme(next);
+  });
+  // Follow the OS setting until the user picks a theme themselves.
+  systemDark.addEventListener("change", function (e) {
+    if (savedTheme() !== "light" && savedTheme() !== "dark") applyTheme(e.matches ? "dark" : "light");
+  });
 
   function showView(name) {
     ["view-setup", "view-tournament", "view-results", "view-history"].forEach(function (v) {
@@ -117,25 +140,38 @@
     Array.prototype.forEach.call(el["topn-toggle"].children, function (btn) {
       btn.classList.toggle("active", Number(btn.dataset.topn) === draft.topN);
     });
+    Array.prototype.forEach.call(el["timer-toggle"].children, function (btn) {
+      btn.classList.toggle("active", btn.dataset.timer === draft.timer);
+    });
+    el["timer-desc"].textContent = draft.timer === "manual"
+      ? "Each matchup waits for you to press “Let them squawk” — great for songs or clips you need to listen to first. Stats only count squabble time."
+      : "The clock starts as soon as each matchup appears.";
     el["topn-row"].hidden = draft.mode !== "quick";
     el["mode-desc"].textContent = draft.mode === "quick"
       ? "Finds just the top spot(s) without ranking everyone — much faster with a big list."
       : "Ranks every single candidate, 1st through last.";
 
     el["btn-begin"].disabled = n < 2;
-    if (n < 2) { el["btn-begin"].textContent = "Begin Tournament"; return; }
+    if (n < 2) { el["btn-begin"].textContent = "Let the Pecking Begin"; return; }
     if (draft.mode === "quick") {
       var topN = Math.min(draft.topN, n);
       var est = estimateQuickComparisons(n, topN);
       el["btn-begin"].textContent = "Find Top " + topN + " (up to " + est + " matchups)";
     } else {
-      el["btn-begin"].textContent = "Begin Tournament (up to " + estimateComparisons(n) + " matchups)";
+      el["btn-begin"].textContent = "Let the Pecking Begin (up to " + estimateComparisons(n) + " matchups)";
     }
   }
 
   Array.prototype.forEach.call(el["mode-toggle"].children, function (btn) {
     btn.addEventListener("click", function () {
       draft.mode = btn.dataset.mode;
+      saveDraft();
+      renderModeControls();
+    });
+  });
+  Array.prototype.forEach.call(el["timer-toggle"].children, function (btn) {
+    btn.addEventListener("click", function () {
+      draft.timer = btn.dataset.timer;
       saveDraft();
       renderModeControls();
     });
@@ -199,10 +235,11 @@
   el["btn-begin"].addEventListener("click", function () {
     if (draft.roster.length < 2) return;
     apiPost("/api/tournaments", {
-      category: draft.category || "Untitled Tournament",
+      category: draft.category || "Untitled Ranking",
       candidates: draft.roster,
       mode: draft.mode,
-      top_n: draft.topN
+      top_n: draft.topN,
+      manual_timer: draft.timer === "manual"
     })
       .then(function (payload) {
         draft.roster = [];
@@ -218,14 +255,15 @@
     el["resume-banner"].hidden = !has;
     if (has) {
       var modeLabel = activeTournament.mode === "quick" ? "Quick · Top " + activeTournament.top_n : "Complete ranking";
-      el["resume-title"].textContent = activeTournament.category || "Untitled Tournament";
+      if (activeTournament.manual_timer) modeLabel += " · Manual timer";
+      el["resume-title"].textContent = activeTournament.category || "Untitled Ranking";
       el["resume-sub"].textContent = modeLabel + " · Matchup " + (activeTournament.comparisons + 1) + " of up to " +
         activeTournament.total_estimate;
     }
   }
   el["btn-resume"].addEventListener("click", function () { enterTournament(activeTournament); });
   el["btn-discard"].addEventListener("click", function () {
-    if (!confirm("Discard this unfinished tournament? This can’t be undone.")) return;
+    if (!confirm("Discard this unfinished game? This can’t be undone.")) return;
     apiPost("/api/tournaments/" + activeTournament.id + "/abandon", {}).then(function () {
       activeTournament = null;
       renderResumeBanner();
@@ -243,39 +281,95 @@
 
   /* ---------- tournament view ---------- */
   var currentTid = null;
-  var matchupShownAt = null; // timestamp a matchup became visible, for "heaviest debate" stats
+  var matchupShownAt = null; // timestamp the debate clock started, for "heaviest debate" stats
+  var manualTimer = false;   // when true, the clock waits for "Start debate" instead of starting on render
+  var clockInterval = null;
+  var voting = false;        // guards against double-clicks sending two votes for one matchup
+
+  function stopClock() {
+    if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+  }
+
+  function setVotingLocked(locked) {
+    el["ring"].classList.toggle("locked", locked);
+    el["card-a"].disabled = locked;
+    el["card-b"].disabled = locked;
+    el["btn-tie"].disabled = locked;
+  }
+
+  function startDebate() {
+    matchupShownAt = Date.now();
+    setVotingLocked(false);
+    el["btn-start-debate"].hidden = true;
+    el["debate-hint"].hidden = true;
+    el["debate-clock"].hidden = false;
+    el["debate-clock-time"].textContent = "0:00";
+    stopClock();
+    clockInterval = setInterval(function () {
+      var sec = Math.floor((Date.now() - matchupShownAt) / 1000);
+      el["debate-clock-time"].textContent = Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+    }, 250);
+  }
+  el["btn-start-debate"].addEventListener("click", startDebate);
 
   function enterTournament(payload) {
     currentTid = payload.id;
+    manualTimer = !!payload.manual_timer;
     showView("view-tournament");
     renderMatchup(payload);
   }
 
   function renderMatchup(payload) {
+    voting = false;
+    stopClock();
     if (payload.done) { finishTournament(payload); return; }
-    var modeSuffix = payload.mode === "quick" ? " · TOP " + payload.top_n : "";
-    el["bout-category"].textContent = (payload.category || "").toUpperCase() + modeSuffix;
+    var modeSuffix = payload.mode === "quick" ? " · Top " + payload.top_n : "";
+    el["bout-category"].textContent = (payload.category || "") + modeSuffix;
     el["name-a"].textContent = payload.a.name;
     el["name-b"].textContent = payload.b.name;
     el["card-a"].dataset.id = payload.a.id;
     el["card-b"].dataset.id = payload.b.id;
-    el["bout-counter"].textContent = "MATCHUP " + (payload.comparisons + 1) + " / up to " + payload.total_estimate;
+    el["bout-counter"].textContent = "Peck " + (payload.comparisons + 1) + " / up to " + payload.total_estimate;
     var pct = payload.total_estimate > 0 ? Math.min(payload.comparisons / payload.total_estimate, 1) : 1;
     el["progress-fill"].style.width = (pct * 100).toFixed(1) + "%";
-    matchupShownAt = Date.now();
+    el["card-a"].classList.remove("picked");
+    el["card-b"].classList.remove("picked");
+    // Restart the pop-in animation so each new matchup bounces in
+    el["ring"].classList.remove("pop");
+    void el["ring"].offsetWidth;
+    el["ring"].classList.add("pop");
+    el["debate-bar"].hidden = !manualTimer;
+    if (manualTimer) {
+      matchupShownAt = null;
+      setVotingLocked(true);
+      el["btn-start-debate"].hidden = false;
+      el["debate-hint"].hidden = false;
+      el["debate-clock"].hidden = true;
+    } else {
+      setVotingLocked(false);
+      matchupShownAt = Date.now();
+    }
   }
 
   function castVote(choice) {
+    if (voting || (manualTimer && !matchupShownAt)) return;
+    voting = true;
+    if (choice !== "tie") el[choice === "a" ? "card-a" : "card-b"].classList.add("picked");
     var durationMs = matchupShownAt ? (Date.now() - matchupShownAt) : null;
-    apiPost("/api/tournaments/" + currentTid + "/vote", { choice: choice, duration_ms: durationMs }).then(renderMatchup);
+    // Give the picked bird a moment to hop before the next matchup replaces it
+    var hopDelay = new Promise(function (resolve) { setTimeout(resolve, choice === "tie" ? 0 : 280); });
+    Promise.all([apiPost("/api/tournaments/" + currentTid + "/vote", { choice: choice, duration_ms: durationMs }), hopDelay])
+      .then(function (results) { renderMatchup(results[0]); })
+      .catch(function () { voting = false; });
   }
   el["card-a"].addEventListener("click", function () { castVote("a"); });
   el["card-b"].addEventListener("click", function () { castVote("b"); });
   el["btn-tie"].addEventListener("click", function () { castVote("tie"); });
 
   el["btn-abandon"].addEventListener("click", function () {
-    if (!confirm("Abandon this tournament and return to setup? Your progress will be discarded.")) return;
+    if (!confirm("Fly the coop? This game’s progress will be discarded and you’ll return to setup.")) return;
     apiPost("/api/tournaments/" + currentTid + "/abandon", {}).then(function () {
+      stopClock();
       activeTournament = null;
       enterSetup();
     });
@@ -291,7 +385,7 @@
   /* ---------- results view ---------- */
   function renderResults(record) {
     var isQuick = record.mode === "quick";
-    el["results-eyebrow"].textContent = isQuick ? "TOP " + record.top_n : "FINAL STANDINGS";
+    el["results-eyebrow"].textContent = isQuick ? "Top " + record.top_n + " of the pecking order" : "The final pecking order";
     el["results-category"].textContent = record.category;
     el["results-stat"].textContent = isQuick
       ? ("Top " + record.standings.length + " of " + record.total_candidates + " candidates · decided in " +
@@ -310,15 +404,21 @@
       name.className = "standing-name";
       name.textContent = s.name;
       li.appendChild(rank); li.appendChild(name);
+      if (s.rank === 1) {
+        var roost = document.createElement("span");
+        roost.className = "roost-tag";
+        roost.textContent = "👑 Top of the roost";
+        li.appendChild(roost);
+      }
       if (seen[s.rank] > 1) {
         var tag = document.createElement("span");
         tag.className = "standing-tag";
-        tag.textContent = "TIE";
+        tag.textContent = "Tie";
         li.appendChild(tag);
       }
       el["results-list"].appendChild(li);
     });
-    renderFunStats(record.fun_stats);
+    renderFunStats(record.fun_stats, !!record.manual_timer);
     el["btn-back-history"].hidden = resultsSource !== "history";
     el["btn-new"].hidden = resultsSource === "history";
     el["btn-copy"].dataset.category = record.category;
@@ -362,11 +462,11 @@
     container.appendChild(ol);
   }
 
-  function renderFunStats(stats) {
+  function renderFunStats(stats, manual) {
     if (!stats || stats.matchup_count === 0) { el["fun-stats"].hidden = true; return; }
     el["fun-stats"].hidden = false;
 
-    var tiles = [{ label: "Total deliberation time", value: formatDuration(stats.total_duration_ms) }];
+    var tiles = [{ label: manual ? "Total squabble time" : "Total deliberation time", value: formatDuration(stats.total_duration_ms) }];
     if (stats.hot_streak) {
       tiles.push({
         label: "Hot streak",
@@ -380,7 +480,7 @@
       });
     }
     if (stats.tie_count > 0) {
-      tiles.push({ label: "Too close to call", value: stats.tie_count + (stats.tie_count === 1 ? " tie" : " ties") });
+      tiles.push({ label: "Birds of a feather", value: stats.tie_count + (stats.tie_count === 1 ? " tie" : " ties") });
     }
 
     el["stat-tiles"].innerHTML = "";
@@ -389,7 +489,7 @@
       tile.className = "stat-tile";
       var label = document.createElement("div");
       label.className = "stat-tile-label";
-      label.textContent = t.label.toUpperCase();
+      label.textContent = t.label;
       var value = document.createElement("div");
       value.className = "stat-tile-value";
       value.textContent = t.value;
@@ -397,15 +497,18 @@
       el["stat-tiles"].appendChild(tile);
     });
 
-    renderDebateList(el["heaviest-list"], "HEAVIEST DEBATES", stats.heaviest_debates);
-    renderDebateList(el["easiest-list"], "EASIEST CALLS", stats.easiest_calls);
+    renderDebateList(el["heaviest-list"], "🪶 Biggest squabbles", stats.heaviest_debates);
+    el["stats-footnote"].textContent = manual
+      ? "Timed from when you pressed “Let them squawk” to when you voted — listening time isn’t counted."
+      : "Timed from when a matchup appears to when you vote — so a bathroom break might sneak into “biggest squabbles.”";
+    renderDebateList(el["easiest-list"], "🌱 Easiest calls", stats.easiest_calls);
   }
 
   el["btn-new"].addEventListener("click", function () { enterSetup(); });
   el["btn-back-history"].addEventListener("click", function () { enterHistory(); });
   el["btn-copy"].addEventListener("click", function () {
     var cat = el["results-category"].textContent;
-    var lines = ["TIER TOURNAMENT — " + cat, new Date().toLocaleDateString(), ""];
+    var lines = ["PECKING ORDER — " + cat, new Date().toLocaleDateString(), ""];
     Array.prototype.forEach.call(el["results-list"].children, function (li) {
       var rank = li.querySelector(".standing-rank").textContent.replace("#", "");
       var name = li.querySelector(".standing-name").textContent;
@@ -425,9 +528,9 @@
   });
 
   el["btn-pdf"].addEventListener("click", function () {
-    var cat = el["results-category"].textContent || "Tier Tournament";
+    var cat = el["results-category"].textContent || "Pecking Order";
     var originalTitle = document.title;
-    document.title = cat.replace(/[\\/:*?"<>|]/g, "").trim() || "Tier Tournament Results";
+    document.title = cat.replace(/[\\/:*?"<>|]/g, "").trim() || "Pecking Order Results";
     window.print();
     document.title = originalTitle;
   });
@@ -459,7 +562,7 @@
       metaWrap.style.gap = "8px";
       var modeTag = document.createElement("span");
       modeTag.className = "mode-tag";
-      modeTag.textContent = record.mode === "quick" ? "TOP " + record.top_n : "FULL";
+      modeTag.textContent = record.mode === "quick" ? "Top " + record.top_n : "Full";
       var metaSpan = document.createElement("span");
       metaSpan.className = "history-meta mono";
       metaSpan.textContent = record.standings.length + " · " + (record.date ? new Date(record.date).toLocaleDateString() : "");

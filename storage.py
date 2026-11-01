@@ -36,7 +36,8 @@ def init_db() -> None:
                 finished_at TEXT,
                 done INTEGER NOT NULL DEFAULT 0,
                 engine_json TEXT NOT NULL,
-                vote_log_json TEXT NOT NULL DEFAULT '[]'
+                vote_log_json TEXT NOT NULL DEFAULT '[]',
+                manual_timer INTEGER NOT NULL DEFAULT 0
             )
             """
         )
@@ -48,15 +49,24 @@ def init_db() -> None:
             conn.execute("ALTER TABLE tournaments ADD COLUMN top_n INTEGER")
         if "vote_log_json" not in existing_cols:
             conn.execute("ALTER TABLE tournaments ADD COLUMN vote_log_json TEXT NOT NULL DEFAULT '[]'")
+        if "manual_timer" not in existing_cols:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN manual_timer INTEGER NOT NULL DEFAULT 0")
 
 
-def create(category: str, engine_dict: dict, mode: str = "full", top_n: Optional[int] = None) -> str:
+def create(
+    category: str,
+    engine_dict: dict,
+    mode: str = "full",
+    top_n: Optional[int] = None,
+    manual_timer: bool = False,
+) -> str:
     tid = str(uuid.uuid4())
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO tournaments (id, category, mode, top_n, created_at, done, engine_json) "
-            "VALUES (?, ?, ?, ?, ?, 0, ?)",
-            (tid, category, mode, top_n, datetime.now(timezone.utc).isoformat(), json.dumps(engine_dict)),
+            "INSERT INTO tournaments (id, category, mode, top_n, manual_timer, created_at, done, engine_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
+            (tid, category, mode, top_n, int(manual_timer), datetime.now(timezone.utc).isoformat(),
+             json.dumps(engine_dict)),
         )
     return tid
 

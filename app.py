@@ -1,4 +1,4 @@
-"""Tier Tournament -- local web app.
+"""Pecking Order -- local web app.
 
 Run with:   python app.py
 Then open:  http://127.0.0.1:5000
@@ -16,6 +16,9 @@ Two modes share the same API shape (advance -> comparison -> vote -> repeat
 Every vote is also appended to a vote log (timestamped client-side, from
 when the matchup appeared to when it was decided) so results can show fun
 stats -- heaviest debates, easiest calls, streaks -- via stats.py.
+With the manual debate timer on, the clock instead starts when the group
+presses "Start debate" (e.g. after listening to two songs), so the stats
+measure only the debate.
 """
 from __future__ import annotations
 
@@ -44,7 +47,7 @@ def _result_order(t) -> list[str]:
     return t.placed if isinstance(t, QuickTournament) else t.final_order
 
 
-def _matchup_payload(t, tid: str, category: str, mode: str, top_n, vote_log: list) -> dict:
+def _matchup_payload(t, tid: str, category: str, mode: str, top_n, vote_log: list, manual_timer: bool) -> dict:
     """Shape the engine's current state into what the frontend needs next:
     either the next matchup to show, or the final standings + fun stats."""
     pair = t.advance()
@@ -58,6 +61,7 @@ def _matchup_payload(t, tid: str, category: str, mode: str, top_n, vote_log: lis
             "category": category,
             "mode": mode,
             "top_n": top_n,
+            "manual_timer": manual_timer,
             "total_candidates": len(t.items),
             "comparisons": t.comparisons_count,
             "standings": standings,
@@ -70,6 +74,7 @@ def _matchup_payload(t, tid: str, category: str, mode: str, top_n, vote_log: lis
         "category": category,
         "mode": mode,
         "top_n": top_n,
+        "manual_timer": manual_timer,
         "comparisons": t.comparisons_count,
         "total_estimate": t.total_estimate,
         "a": {"id": a, "name": t.items[a]},
@@ -90,15 +95,18 @@ def api_active():
         return jsonify(None)
     t = _load_engine(row)
     vote_log = json.loads(row["vote_log_json"])
-    return jsonify(_matchup_payload(t, row["id"], row["category"], row["mode"], row["top_n"], vote_log))
+    return jsonify(
+        _matchup_payload(t, row["id"], row["category"], row["mode"], row["top_n"], vote_log, bool(row["manual_timer"]))
+    )
 
 
 @app.route("/api/tournaments", methods=["POST"])
 def api_create():
     body = request.get_json(force=True) or {}
-    category = (body.get("category") or "Untitled Tournament").strip()
+    category = (body.get("category") or "Untitled Ranking").strip()
     names = [n.strip() for n in body.get("candidates", []) if n.strip()]
     mode = body.get("mode") or "full"
+    manual_timer = bool(body.get("manual_timer"))
     if mode not in ("full", "quick"):
         return jsonify({"error": "Invalid mode."}), 400
     if len(names) < 2:
@@ -118,10 +126,10 @@ def api_create():
     else:
         t = Tournament(items)
 
-    tid = storage.create(category, t.to_dict(), mode=mode, top_n=top_n)
+    tid = storage.create(category, t.to_dict(), mode=mode, top_n=top_n, manual_timer=manual_timer)
     # advance() populates the first pending comparison; that mutation must
     # be persisted, or the next vote will find nothing pending.
-    payload = _matchup_payload(t, tid, category, mode, top_n, vote_log=[])
+    payload = _matchup_payload(t, tid, category, mode, top_n, vote_log=[], manual_timer=manual_timer)
     storage.update(tid, t.to_dict(), done=payload["done"], vote_log=[])
     return jsonify(payload)
 
@@ -130,7 +138,7 @@ def api_create():
 def api_vote(tid):
     row = storage.get(tid)
     if not row or row["done"]:
-        return jsonify({"error": "Tournament not found or already finished."}), 404
+        return jsonify({"error": "Game not found or already finished."}), 404
     body = request.get_json(force=True) or {}
     choice = body.get("choice")
     if choice not in ("a", "b", "tie"):
@@ -167,7 +175,9 @@ def api_vote(tid):
         }
     )
 
-    payload = _matchup_payload(t, tid, row["category"], row["mode"], row["top_n"], vote_log)
+    payload = _matchup_payload(
+        t, tid, row["category"], row["mode"], row["top_n"], vote_log, bool(row["manual_timer"])
+    )
     storage.update(tid, t.to_dict(), done=payload["done"], vote_log=vote_log)
     return jsonify(payload)
 
@@ -199,6 +209,7 @@ def api_history():
                 "category": row["category"],
                 "mode": row["mode"],
                 "top_n": row["top_n"],
+                "manual_timer": bool(row["manual_timer"]),
                 "total_candidates": len(t.items),
                 "date": row["finished_at"],
                 "comparisons": t.comparisons_count,
