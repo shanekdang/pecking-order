@@ -40,8 +40,8 @@ database server and no build step.
 With git:
 
 ```bash
-git clone https://github.com/shanekdang/tier-tournament.git
-cd tier-tournament
+git clone https://github.com/shanekdang/pecking-order.git
+cd pecking-order
 ```
 
 Without git: on the GitHub page, click **Code → Download ZIP**, unzip it,
