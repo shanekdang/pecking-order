@@ -37,7 +37,23 @@ def init_db() -> None:
                 done INTEGER NOT NULL DEFAULT 0,
                 engine_json TEXT NOT NULL,
                 vote_log_json TEXT NOT NULL DEFAULT '[]',
-                manual_timer INTEGER NOT NULL DEFAULT 0
+                manual_timer INTEGER NOT NULL DEFAULT 0,
+                phone_voting INTEGER NOT NULL DEFAULT 0,
+                rematch_of TEXT
+            )
+            """
+        )
+        # Each phone voter's own ranking of a finished phone-voting game.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS personal_rankings (
+                tid TEXT NOT NULL,
+                name TEXT NOT NULL,
+                engine_json TEXT NOT NULL,
+                prefilled INTEGER NOT NULL DEFAULT 0,
+                done INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (tid, name)
             )
             """
         )
@@ -51,6 +67,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE tournaments ADD COLUMN vote_log_json TEXT NOT NULL DEFAULT '[]'")
         if "manual_timer" not in existing_cols:
             conn.execute("ALTER TABLE tournaments ADD COLUMN manual_timer INTEGER NOT NULL DEFAULT 0")
+        if "phone_voting" not in existing_cols:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN phone_voting INTEGER NOT NULL DEFAULT 0")
+        if "rematch_of" not in existing_cols:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN rematch_of TEXT")
 
 
 def create(
@@ -59,13 +79,17 @@ def create(
     mode: str = "full",
     top_n: Optional[int] = None,
     manual_timer: bool = False,
+    phone_voting: bool = False,
+    rematch_of: Optional[str] = None,
 ) -> str:
     tid = str(uuid.uuid4())
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO tournaments (id, category, mode, top_n, manual_timer, created_at, done, engine_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
-            (tid, category, mode, top_n, int(manual_timer), datetime.now(timezone.utc).isoformat(),
+            "INSERT INTO tournaments "
+            "(id, category, mode, top_n, manual_timer, phone_voting, rematch_of, created_at, done, engine_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
+            (tid, category, mode, top_n, int(manual_timer), int(phone_voting), rematch_of,
+             datetime.now(timezone.utc).isoformat(),
              json.dumps(engine_dict)),
         )
     return tid
@@ -122,3 +146,31 @@ def list_history() -> list[dict]:
 def delete(tid: str) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM tournaments WHERE id = ?", (tid,))
+        conn.execute("DELETE FROM personal_rankings WHERE tid = ?", (tid,))
+
+
+def get_personal(tid: str, name: str) -> Optional[dict]:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM personal_rankings WHERE tid = ? AND name = ?", (tid, name)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_personal(tid: str, name: str, engine_dict: dict, prefilled: int, done: bool) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO personal_rankings (tid, name, engine_json, prefilled, done, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT (tid, name) DO UPDATE SET engine_json = excluded.engine_json, "
+            "prefilled = excluded.prefilled, done = excluded.done, updated_at = excluded.updated_at",
+            (tid, name, json.dumps(engine_dict), prefilled, int(done), datetime.now(timezone.utc).isoformat()),
+        )
+
+
+def list_personal(tid: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM personal_rankings WHERE tid = ? ORDER BY updated_at", (tid,)
+        ).fetchall()
+        return [dict(r) for r in rows]

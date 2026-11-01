@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pecking Order · Join the flock</title>
+<script>
+  // Set the theme before first paint so there's no flash of the wrong one.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("po.theme"); } catch (e) { /* ignore */ }
+    if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="play">
+  {% include "_bird.html" %}
+
+  <div id="app">
+    <header class="masthead play-masthead">
+      <div class="masthead-brand">
+        <svg class="bird masthead-logo" aria-hidden="true"><use href="#bird" /></svg>
+        <div>
+          <span class="masthead-eyebrow">a game of ranking</span>
+          <h1 class="masthead-title">Pecking Order</h1>
+        </div>
+      </div>
+      <span id="p-me" class="flock-chip me-chip" hidden></span>
+    </header>
+
+    <section id="p-join" class="view" hidden>
+      <div class="panel">
+        <label class="field-label" for="p-name">What should the flock call you?</label>
+        <div class="add-row">
+          <input id="p-name" type="text" placeholder="Your name" maxlength="20" autocomplete="nickname" enterkeyhint="go" />
+          <button id="p-join-btn" class="btn btn-gold" type="button">Join</button>
+        </div>
+        <div id="p-join-msg" class="inline-msg"></div>
+        <p class="text-faint" style="margin:6px 0 0;">You’ll vote on each matchup from this phone. Nobody sees your
+          vote until everyone’s in.</p>
+      </div>
+    </section>
+
+    <section id="p-game" class="view" hidden>
+      <div id="p-idle" class="p-pane p-center" hidden>
+        <svg class="bird p-big-bird bob" aria-hidden="true"><use href="#bird" /></svg>
+        <h2 class="section-title">Perched and ready</h2>
+        <p class="text-dim">Waiting for the host to start a game with phone voting…</p>
+      </div>
+
+      <div id="p-lobby" class="p-pane p-center" hidden>
+        <svg id="p-lobby-bird" class="bird p-big-bird bob" aria-hidden="true"><use href="#bird" /></svg>
+        <span class="field-label" style="margin:0;">You’re in the flock for</span>
+        <h2 id="p-lobby-category" class="section-title"></h2>
+        <p class="text-dim">The host will start the pecking any moment.</p>
+        <ul id="p-lobby-players" class="flock-chips centered"></ul>
+      </div>
+
+      <div id="p-vote" class="p-pane" hidden>
+        <div class="bout-meta">
+          <span id="p-category" class="bout-category"></span>
+          <span id="p-counter" class="bout-counter mono"></span>
+        </div>
+        <div id="p-ring" class="p-ring">
+          <button id="p-a" class="corner-card corner-a p-card" type="button">
+            <span class="corner-label">ROBIN</span>
+            <span id="p-name-a" class="corner-name"></span>
+            <span class="p-check" aria-hidden="true">✓</span>
+          </button>
+          <div class="vs-disc">vs</div>
+          <button id="p-b" class="corner-card corner-b p-card" type="button">
+            <span class="corner-label">BLUEBIRD</span>
+            <span id="p-name-b" class="corner-name"></span>
+            <span class="p-check" aria-hidden="true">✓</span>
+          </button>
+        </div>
+        <button id="p-tie" class="btn btn-ghost btn-block" type="button">Birds of a feather — it’s a tie</button>
+        <p id="p-vote-status" class="p-status"></p>
+      </div>
+
+      <div id="p-verdict" class="p-pane p-center" hidden>
+        <span id="p-verdict-emoji" class="p-emoji"></span>
+        <h2 id="p-verdict-title" class="section-title"></h2>
+        <p id="p-verdict-sub" class="text-dim"></p>
+        <p id="p-verdict-tally" class="bout-counter mono p-tally"></p>
+      </div>
+
+      <div id="p-unveiling" class="p-pane p-center" hidden>
+        <span class="p-emoji drum">🥁</span>
+        <h2 class="section-title">Eyes on the big screen!</h2>
+        <p class="text-dim">The final pecking order is being revealed…</p>
+      </div>
+
+      <div id="p-done" class="p-pane" hidden>
+        <div class="results-header">
+          <span id="p-done-eyebrow" class="field-label">The final pecking order</span>
+          <h2 id="p-done-category" class="section-title"></h2>
+          <p id="p-done-me" class="text-dim"></p>
+        </div>
+        <div id="p-list-toggle" class="segmented" role="group" aria-label="Whose ranking" hidden>
+          <button class="segmented-btn" data-list="mine" type="button">🐣 Mine</button>
+          <button class="segmented-btn" data-list="flock" type="button">🐦 The flock</button>
+        </div>
+        <ol id="p-done-list" class="standings-list"></ol>
+
+        <div id="p-own-cta" class="panel own-cta" hidden>
+          <span class="field-label">🐣 Your own pecking order</span>
+          <p id="p-own-blurb" class="text-dim"></p>
+          <button id="p-own-start" class="btn btn-primary btn-block" type="button">Rank it my way</button>
+        </div>
+        <div id="p-own-actions" class="results-actions" hidden>
+          <button id="p-download" class="btn btn-gold" type="button">Download as image</button>
+          <button id="p-copy" class="btn btn-ghost" type="button">Copy as text</button>
+        </div>
+        <p class="text-faint" style="text-align:center; margin-top:18px;">Stay on this page and you’ll be ready for the next game.</p>
+      </div>
+
+      <div id="p-solo" class="p-pane" hidden>
+        <div class="bout-meta">
+          <span class="bout-category">Your own pecking order</span>
+          <span id="p-solo-counter" class="bout-counter mono"></span>
+        </div>
+        <p id="p-solo-note" class="text-faint" style="margin:0 0 14px;"></p>
+        <div class="p-ring">
+          <button id="p-solo-a" class="corner-card corner-a p-card" type="button">
+            <span class="corner-label">ROBIN</span>
+            <span id="p-solo-name-a" class="corner-name"></span>
+          </button>
+          <div class="vs-disc">vs</div>
+          <button id="p-solo-b" class="corner-card corner-b p-card" type="button">
+            <span class="corner-label">BLUEBIRD</span>
+            <span id="p-solo-name-b" class="corner-name"></span>
+          </button>
+        </div>
+        <button id="p-solo-tie" class="btn btn-ghost btn-block" type="button">Birds of a feather — it’s a tie</button>
+        <div style="text-align:center; margin-top:14px;">
+          <button id="p-solo-back" class="link-btn" type="button">← Back to the results</button>
+        </div>
+      </div>
+    </section>
+
+    <div style="text-align:center; margin-top:22px;">
+      <button id="p-leave" class="link-btn" type="button" hidden>Not you? Leave the flock</button>
+    </div>
+  </div>
+
+  <canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
+
+  <script src="{{ url_for('static', filename='confetti.js') }}"></script>
+  <script src="{{ url_for('static', filename='play.js') }}"></script>
+</body>
+</html>

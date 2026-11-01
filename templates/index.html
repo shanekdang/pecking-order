@@ -20,21 +20,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <!-- One chubby bird, reused everywhere; colors come from --bird-* custom properties -->
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <symbol id="bird" viewBox="0 0 64 64">
-      <path style="fill:var(--bird-dark)" d="M14 38 C6 36 2 30 3 25 C8 29 12 30 17 31 Z" />
-      <circle style="fill:var(--bird-body)" cx="32" cy="36" r="21" />
-      <path style="fill:var(--bird-body)" d="M28 17 C26 9 32 6 36 8 C32 10 31 13 33 16 Z" />
-      <ellipse style="fill:var(--bird-belly)" cx="37" cy="44" rx="13" ry="11" />
-      <path style="fill:var(--bird-dark)" d="M15 36 C21 28 32 30 33 38 C30 45 20 46 15 36 Z" />
-      <circle style="fill:var(--bird-eye)" cx="40" cy="29" r="3.2" />
-      <circle fill="#fff" cx="41.2" cy="27.8" r="1.1" />
-      <ellipse style="fill:var(--blush)" opacity="0.6" cx="45" cy="36.5" rx="3.4" ry="2.2" />
-      <path style="fill:var(--beak)" d="M50 30 L58.5 33.5 L50 37 Q48 33.5 50 30 Z" />
-      <path style="stroke:var(--beak)" fill="none" stroke-width="2.6" stroke-linecap="round" d="M28 56.5 v5 M37 56.5 v5" />
-    </symbol>
-  </svg>
+  {% include "_bird.html" %}
 
   <div id="app">
     <header class="masthead">
@@ -90,7 +76,12 @@
           <button id="btn-add" class="btn btn-gold" type="button">Add</button>
         </div>
         <div id="add-msg" class="inline-msg"></div>
-        <button id="btn-toggle-bulk" class="link-btn" type="button">+ paste a list</button>
+        <div class="setup-links">
+          <button id="btn-toggle-bulk" class="link-btn" type="button">+ paste a list</button>
+          <button id="btn-toggle-packs" class="link-btn" type="button">🎁 grab a flock pack</button>
+          <button id="btn-clear-roster" class="link-btn" type="button" hidden>clear the flock</button>
+        </div>
+        <div id="packs-area" class="packs-grid" hidden></div>
         <div id="bulk-area" hidden style="margin-top:10px;">
           <textarea id="input-bulk" rows="5" placeholder="One contender per line…"></textarea>
           <button id="btn-add-bulk" class="btn btn-ghost" type="button" style="margin-top:10px;">Add all</button>
@@ -125,11 +116,33 @@
         </div>
         <p id="timer-desc" class="text-faint" style="margin-top:6px;"></p>
 
+        <label class="field-label">Voting</label>
+        <div class="segmented" id="voting-toggle" role="group" aria-label="How to vote">
+          <button class="segmented-btn" data-voting="screen" type="button">One Screen</button>
+          <button class="segmented-btn" data-voting="phones" type="button">📱 Everyone’s Phones</button>
+        </div>
+        <p id="voting-desc" class="text-faint" style="margin-top:6px;"></p>
+
         <button id="btn-begin" class="btn btn-primary btn-block" disabled type="button">Let the Pecking Begin</button>
       </div>
     </section>
 
     <section id="view-tournament" class="view" hidden>
+      <div id="room-lobby" class="room-lobby panel" hidden>
+        <span class="field-label">Join the flock</span>
+        <h2 id="lobby-category" class="section-title"></h2>
+        <p class="text-dim lobby-blurb">Scan this with your phone’s camera. Everyone votes on their own phone, ballots stay
+          secret until the reveal, and the majority rules.</p>
+        <div id="lobby-qr" class="qr-box"></div>
+        <p id="lobby-url" class="join-url mono"></p>
+        <p id="lobby-lan-warning" class="inline-msg" hidden>Phones can’t connect: the app was started with
+          <code>--local</code>. Restart it with plain <code>python app.py</code>.</p>
+        <ul id="lobby-players" class="flock-chips"></ul>
+        <p id="lobby-empty" class="text-faint">Nobody’s perched here yet…</p>
+        <button id="btn-room-start" class="btn btn-primary btn-block" type="button">Start the pecking</button>
+      </div>
+
+      <div id="match-area">
       <div class="bout-meta">
         <span id="bout-category" class="bout-category"></span>
         <span id="bout-counter" class="bout-counter mono"></span>
@@ -140,17 +153,30 @@
         </div>
       </div>
 
+      <div id="flock-bar" class="flock-bar" hidden>
+        <button id="btn-flock-qr" class="flock-qr" type="button" aria-label="Show the join code"></button>
+        <div class="flock-bar-main">
+          <div class="flock-bar-status">
+            <strong id="flock-status"></strong>
+            <span id="flock-clock" class="flock-clock mono"></span>
+          </div>
+          <ul id="flock-players" class="flock-chips small"></ul>
+        </div>
+      </div>
+
       <div id="ring" class="ring">
         <button id="card-a" class="corner-card corner-a" type="button">
           <svg class="bird card-bird" aria-hidden="true"><use href="#bird" /></svg>
           <span class="corner-label">ROBIN</span>
           <span id="name-a" class="corner-name"></span>
+          <span id="votes-a" class="card-votes"></span>
         </button>
         <div class="vs-disc">vs</div>
         <button id="card-b" class="corner-card corner-b" type="button">
           <svg class="bird bird-blue bird-flip card-bird" aria-hidden="true"><use href="#bird" /></svg>
           <span class="corner-label">BLUEBIRD</span>
           <span id="name-b" class="corner-name"></span>
+          <span id="votes-b" class="card-votes"></span>
         </button>
       </div>
 
@@ -162,8 +188,16 @@
         </div>
       </div>
 
+      <div id="room-controls" class="room-controls" hidden>
+        <p id="room-status" class="room-status"></p>
+        <div id="room-tie-voters" class="tie-voters" hidden><span class="tie-voters-label">Called it a tie:</span><span id="room-tie-birds" class="card-votes"></span></div>
+        <button id="btn-room-close" class="btn btn-ghost btn-block" type="button">Close the vote now</button>
+        <button id="btn-room-next" class="btn btn-primary btn-block" type="button">Next matchup ▶</button>
+      </div>
+
       <button id="btn-tie" class="btn btn-ghost btn-block" type="button">Birds of a feather — call it a tie</button>
-      <p class="tie-hint text-faint">Last resort — if you lean either way at all, even barely, pick that one.</p>
+      <p id="tie-hint" class="tie-hint text-faint">Last resort — if you lean either way at all, even barely, pick that one.</p>
+      </div>
       <div style="text-align:center; margin-top:14px;">
         <button id="btn-abandon" class="link-btn danger" type="button">Fly the coop (abandon this game)</button>
       </div>
@@ -174,12 +208,40 @@
         <span class="print-title">Pecking Order</span>
         <span id="print-date" class="print-date"></span>
       </div>
+      <div id="unveil" class="unveil" hidden>
+        <span class="field-label unveil-eyebrow">The votes are counted…</span>
+        <h2 id="unveil-category" class="section-title"></h2>
+        <div id="unveil-spotlight" class="unveil-spotlight">
+          <p id="unveil-caption" class="unveil-caption"></p>
+          <div id="unveil-name" class="unveil-name"></div>
+        </div>
+        <div id="podium" class="podium"></div>
+        <ol id="unveil-tail" class="unveil-tail"></ol>
+        <button id="btn-unveil-skip" class="link-btn" type="button">Skip to the results ⏭</button>
+      </div>
+
+      <div id="results-body">
       <div class="results-header">
         <span id="results-eyebrow" class="field-label">The final pecking order</span>
         <h2 id="results-category" class="section-title"></h2>
         <p id="results-stat" class="text-dim mono"></p>
       </div>
       <ol id="results-list" class="standings-list"></ol>
+
+      <div id="rematch-box" class="rematch-box" hidden>
+        <span id="rematch-title" class="field-label"></span>
+        <ol id="rematch-movers" class="debate-list mover-list"></ol>
+        <div id="rematch-flips-title" class="debate-list-title" style="margin-top:16px;">🔄 Changed your minds</div>
+        <ol id="rematch-flips" class="debate-list"></ol>
+        <p id="rematch-steady" class="text-faint"></p>
+      </div>
+
+      <div id="personal-box" class="personal-box" hidden>
+        <span class="field-label">🐣 Everyone’s own pecking order</span>
+        <p class="text-faint" style="margin:0 0 12px;">Each voter can rank the flock by their own taste on their phone.
+          Their votes fill in most of it, so it only takes a few more picks.</p>
+        <div id="personal-grid" class="personal-grid"></div>
+      </div>
 
       <div id="fun-stats" class="fun-stats" hidden>
         <span class="field-label">Fun stats</span>
@@ -188,14 +250,18 @@
           <div id="heaviest-list" class="debate-list-col"></div>
           <div id="easiest-list" class="debate-list-col"></div>
         </div>
+        <div id="flock-list" class="debate-list-col flock-list" hidden></div>
         <p id="stats-footnote" class="text-faint"></p>
       </div>
 
       <div class="results-actions">
         <button id="btn-copy" class="btn btn-ghost" type="button">Copy as text</button>
         <button id="btn-pdf" class="btn btn-ghost" type="button">Download as PDF</button>
+        <button id="btn-replay" class="btn btn-ghost" type="button">🎉 Replay the reveal</button>
+        <button id="btn-rematch" class="btn btn-gold" type="button">🔁 Rematch</button>
         <button id="btn-new" class="btn btn-primary" type="button">Gather a New Flock</button>
         <button id="btn-back-history" class="btn btn-ghost" type="button" hidden>Back to the nest</button>
+      </div>
       </div>
     </section>
 
@@ -215,6 +281,17 @@
     </section>
   </div>
 
+  <dialog id="qr-dialog" class="qr-dialog">
+    <span class="field-label">Scan to join the flock</span>
+    <div id="qr-dialog-code" class="qr-box"></div>
+    <p id="qr-dialog-url" class="join-url mono"></p>
+    <button id="btn-qr-close" class="btn btn-ghost" type="button">Close</button>
+  </dialog>
+
+  <canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
+
+  <script src="{{ url_for('static', filename='packs.js') }}"></script>
+  <script src="{{ url_for('static', filename='confetti.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
